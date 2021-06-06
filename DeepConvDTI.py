@@ -5,7 +5,7 @@ import pandas as pd
 
 # import keras modules
 import tensorflow as tf
-import keras.backend as K
+from tensorflow.python.keras import backend as K
 from keras.models import Model
 from keras.layers import Input, Dense, Dropout, BatchNormalization, Activation, Embedding, Lambda
 from keras.layers import Convolution1D, GlobalMaxPooling1D, SpatialDropout1D
@@ -14,6 +14,7 @@ from keras.optimizers import Adam
 from keras.regularizers import l2,l1
 from keras.preprocessing import sequence
 
+tf.compat.v1.disable_eager_execution()
 
 from sklearn.metrics import precision_recall_curve, auc, roc_curve
 
@@ -29,7 +30,7 @@ def encodeSeq(seq, seq_dic):
 
 def parse_data(dti_dir, drug_dir, protein_dir, with_label=True,
                prot_len=2500, prot_vec="Convolution",
-               drug_vec="Convolution", drug_len=2048):
+               drug_vec="morgan_fp_r1", drug_len=2048):
 
     print("Parsing {0} , {1}, {2} with length {3}, type {4}".format(*[dti_dir ,drug_dir, protein_dir, prot_len, prot_vec]))
 
@@ -42,17 +43,22 @@ def parse_data(dti_dir, drug_dir, protein_dir, with_label=True,
     dti_df = pd.read_csv(dti_dir)
     drug_df = pd.read_csv(drug_dir, index_col="Compound_ID")
     protein_df = pd.read_csv(protein_dir, index_col="Protein_ID")
-
+    print("asdas1")
 
     if prot_vec == "Convolution":
         protein_df["encoded_sequence"] = protein_df.Sequence.map(lambda a: encodeSeq(a, seq_dic))
+    print("buraya kadar geldi mi")
     dti_df = pd.merge(dti_df, protein_df, left_on=protein_col, right_index=True)
     dti_df = pd.merge(dti_df, drug_df, left_on=drug_col, right_index=True)
+    dti_df = dti_df.drop_duplicates(subset=[drug_col,protein_col]).reset_index()
+    print("o zaman buraya da geldin")
     drug_feature = np.stack(dti_df[drug_vec].map(lambda fp: fp.split("\t")))
+    print("asdasd2")
     if prot_vec=="Convolution":
         protein_feature = sequence.pad_sequences(dti_df["encoded_sequence"].values, prot_len)
     else:
         protein_feature = np.stack(dti_df[prot_vec].map(lambda fp: fp.split("\t")))
+    print("asdasd3")
     if with_label:
         label = dti_df[label_col].values
         print("\tPositive data : %d" %(sum(dti_df[label_col])))
@@ -161,7 +167,7 @@ class Drug_Target_Prediction(object):
 
         opt = Adam(lr=learning_rate, decay=self.__decay)
         self.__model_t.compile(optimizer=opt, loss='binary_crossentropy', metrics=['accuracy'])
-        K.get_session().run(tf.global_variables_initializer())
+        K.get_session().run(tf.compat.v1.global_variables_initializer())
 
     def fit(self, drug_feature, protein_feature, label, n_epoch=10, batch_size=32):
         for _ in range(n_epoch):
